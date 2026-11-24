@@ -47,12 +47,13 @@ def extract_formulas(text, mode="import"):
     """
     解析并转换数学公式。
 
-    返回 (转换后的正文, 公式清单列表)：
+    返回 (转换后的正文, 公式清单列表, 转换的公式数量)：
         - 公式清单里每一项是干净的 LaTeX（不含 $ 分隔符）
-        - import 模式下清单为空（公式保留在正文里）
+        - import 模式下清单为空（公式保留在正文里），但数量仍返回实际转换数
     """
     text = protect_escaped_dollars(text)
     formulas = []  # 干净 LaTeX 列表
+    n_converted = 0
 
     # 单次遍历、按文档顺序匹配五种公式语法。
     # 交替顺序：长分隔符（$$ / \[ / ```math）优先，避免被行内 $ 误匹配。
@@ -67,6 +68,8 @@ def extract_formulas(text, mode="import"):
     )
 
     def repl(m):
+        nonlocal n_converted
+        n_converted += 1
         # 取第一个非 None 的分组，判断是块级（group 1/2/5）还是行内（group 3/4）
         is_block = (
             m.group(1) is not None
@@ -84,7 +87,7 @@ def extract_formulas(text, mode="import"):
 
     text = formula_re.sub(repl, text)
     text = restore_escaped_dollars(text)
-    return text, formulas
+    return text, formulas, n_converted
 
 
 def build_formula_list(formulas):
@@ -225,14 +228,14 @@ def main():
         text = sys.stdin.read()
 
     # 转换
-    converted, formulas = extract_formulas(text, mode=args.mode)
+    converted, formulas, n_converted = extract_formulas(text, mode=args.mode)
 
     # 输出
     if args.clip:
         # 剪贴板只放正文（带占位符），公式清单打印到控制台方便对照
         ok = write_clipboard(converted)
         if ok:
-            print(f"✅ 正文已写入剪贴板（共 {len(formulas)} 个公式）")
+            print(f"✅ 正文已写入剪贴板（共 {n_converted} 个公式）")
             if formulas:
                 print(build_formula_list(formulas))
         else:
@@ -245,7 +248,7 @@ def main():
             out += "\n"
         with open(args.output, "w", encoding="utf-8") as f:
             f.write(out)
-        print(f"✅ 已写入 {args.output}（模式: {args.mode}，公式 {len(formulas)} 个）")
+        print(f"✅ 已写入 {args.output}（模式: {args.mode}，公式 {n_converted} 个）")
     else:
         sys.stdout.write(converted)
         if formulas:
